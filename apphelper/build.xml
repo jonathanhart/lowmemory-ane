@@ -1,0 +1,112 @@
+<!--//////////////////////////////////////////////////////////////////////////////////
+//
+//  Copyright 2012 Freshplanet (http://freshplanet.com | opensource@freshplanet.com)
+//  
+//  Licensed under the Apache License, Version 2.0 (the "License");
+//  you may not use this file except in compliance with the License.
+//  You may obtain a copy of the License at
+//  
+//    http://www.apache.org/licenses/LICENSE-2.0
+//  
+//  Unless required by applicable law or agreed to in writing, software
+//  distributed under the License is distributed on an "AS IS" BASIS,
+//  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+//  See the License for the specific language governing permissions and
+//  limitations under the License.
+//  
+///////////////////////////////////////////////////////////////////////////////////-->
+
+
+<project name="ANE" basedir="." default="compile">
+
+	<!-- Load variables -->
+	<property file="build.properties"/>
+
+	<!-- Clean binaries folder -->
+	<target name="cleanBinaries">
+		<delete dir="${BINARIES_FOLDER}"/>
+		<mkdir dir="${BINARIES_FOLDER}"/>
+		<mkdir dir="${BINARIES_FOLDER}/Default"/>
+		<mkdir dir="${BINARIES_FOLDER}/iOS"/>
+	</target>	
+
+	<!-- Clean iOS project -->
+	<target name="iOSClean" depends="cleanBinaries">
+		<exec executable="xcodebuild" dir="." failonerror="true">
+			<arg line="-project ${IOS_PROJECT_PATH}"/>
+			<arg line="-alltargets clean"/>
+		</exec>
+	</target>	
+
+	<!-- Compile iOS project -->
+	<target name="iOSCompile" depends="iOSClean">
+		<exec executable="xcodebuild" dir="." failonerror="true"> 
+			<arg line="-project ${IOS_PROJECT_PATH}"/>
+			<arg line="-sdk iphoneos"/>
+			<arg line="-alltargets"/>
+			<arg line="-configuration Release"/>
+		</exec>
+	</target>
+
+	<!-- Copy iOS lib in binaries folder -->
+	<target name="iOSCopy" depends="iOSCompile">
+		<copy file="${IOS_LIB_PATH}" todir="${BINARIES_FOLDER}/iOS"/>
+	</target>
+
+    <target name="swc" description="Build SWC library">
+	    <mkdir dir="temp"/>
+        <mkdir dir="temp/swc/content/"/>
+
+        <fileset dir="AS/src" casesensitive="yes" id="classfiles">
+            <include name="**/*.as"/>
+        </fileset>
+
+        <pathconvert property="classlist" refid="classfiles" pathsep=" " dirsep=".">
+            <regexpmapper from=".*src.(.*)\.as" to="\1"/>
+        </pathconvert>
+
+        <exec executable="${AIR_SDK_PATH}/bin/compc" failonerror="true">
+            <arg line='-source-path AS/src'/>
+            <arg line='-output ${SWC_PATH}'/>
+            <arg line='-swf-version=14'/>
+            <arg line='-external-library-path+="${AIR_SDK_PATH}/frameworks/libs/air/airglobal.swc"'/>
+            <arg line='-include-classes ${classlist}'/>
+        </exec>
+
+        <unzip src="${SWC_PATH}" dest="temp/swc/content" overwrite="true"/>
+        <copy file="temp/swc/content/library.swf" todir="${BINARIES_FOLDER}/iOS" overwrite="true"/>
+        <copy file="temp/swc/content/library.swf" todir="${BINARIES_FOLDER}/Default" overwrite="true"/>
+        <delete dir="temp/swc/content/"/>
+		<delete dir="temp"/>
+    </target>
+
+
+	<!-- Compile ANE -->
+	<target name="compile" depends="swc">
+		<java jar="${ADT.JAR}" fork="true" failonerror="true">
+			<arg value="-package"/>
+			<arg value="-target"/>
+			<arg value="ane"/>
+			<arg value="${ANE_PATH}"/>
+			<arg value="${EXTENSION.XML}"/>
+			
+			<arg value="-swc"/>
+			<arg value="${SWC_PATH}"/>
+			
+			<arg value="-platform"/>
+			<arg value="iPhone-ARM"/>
+			<arg value="-platformoptions"/>
+			<arg value="${IOS_PLATFORM_OPTIONS}"/>
+			<arg value="-C"/>
+			<arg value="${BINARIES_FOLDER}/iOS"/>
+			<arg value="."/>
+			
+			<arg value="-platform"/>
+			<arg value="default"/>
+			<arg value="-C"/>
+			<arg value="${BINARIES_FOLDER}/Default"/>
+			<arg value="library.swf"/>
+		</java>
+	</target>
+
+</project>
